@@ -1,7 +1,7 @@
 import express from "express";
 import { createServer } from "http";
-import { connectDb } from "./config/db.js";
-import userRoutes from "./routes/userRoutes.js";
+import { connectDb } from "./src/config/db.js";
+import userRoutes from "./src/routes/userRoutes.js";
 
 connectDb();
 const app = express();
