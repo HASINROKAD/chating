@@ -1,7 +1,7 @@
 import { fetchChatMessages, chatRoom } from "../services/chatServices.js";
 
 export const getMessages = async (req, res) => {
-  const { senderId, receiverId, pageId, limit } = req.query;
+  const { senderId, receiverId, page, limit } = req.query;
 
   try {
     const message = await fetchChatMessages({

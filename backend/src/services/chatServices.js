@@ -1,7 +1,9 @@
-import { mongoose } from "mongoose";
-import Message from "../models/Message.js";
+import mongoose from "mongoose";
+import Message from "../models/messageModel.js";
 import User from "../models/userModel.js";
 import { getRoomId } from "../utils/chatHelper.js";
+
+const ObjectId = mongoose.Types.ObjectId;
 
 export const createMessage = async (messageData) => {
   try {
@@ -86,7 +88,7 @@ export const getUndeliveredMessages = async (userId, partnerId) => {
       receiver: userId,
       sender: partnerId,
       status: "sent",
-    }).$sort({ createdAt: 1 });
+    }).sort({ createdAt: 1 });
     return message;
   } catch (error) {
     throw error;
@@ -95,7 +97,7 @@ export const getUndeliveredMessages = async (userId, partnerId) => {
 
 export const updateUserLastSeen = async (userId, lastSeen) => {
   try {
-    const user = await User.findOneAndUpdate(
+    const user = await User.findByIdAndUpdate(
       userId,
       { lastSeen: lastSeen },
       { new: true },
@@ -110,8 +112,8 @@ export const markMessageAsDelivered = async (userId, partnerId) => {
   try {
     const result = await Message.updateMany(
       {
-        receiver: ObjectId(userId),
-        sender: ObjectId(partnerId),
+        receiver: new ObjectId(userId),
+        sender: new ObjectId(partnerId),
         status: "sent",
       },
       { $set: { status: "delivered" } },
@@ -126,8 +128,8 @@ export const markMessageAsRead = async (userId, partnerId) => {
   try {
     const result = await Message.updateMany(
       {
-        receiver: ObjectId(userId),
-        sender: ObjectId(partnerId),
+        receiver: mongoose.Types.ObjectId(userId),
+        sender: mongoose.Types.ObjectId(partnerId),
         status: { $in: ["sent", "delivered"] },
       },
       { $set: { status: "read" } },
@@ -140,7 +142,7 @@ export const markMessageAsRead = async (userId, partnerId) => {
 
 export const getUserLastSeen = async (userId) => {
   try {
-    const user = await User.findBy(userId).select("lastSeen");
+    const user = await User.findById(userId).select("lastSeen");
     if (!user) {
       return null;
     }
@@ -153,7 +155,7 @@ export const getUserLastSeen = async (userId) => {
 
 export const getUserOnlineStatus = async (userId) => {
   try {
-    const user = await User.findBy(userId).select("isOnline lastSeen");
+    const user = await User.findById(userId).select("isOnline lastSeen");
     if (!user) {
       return { isOnline: false, lastSeen: null };
     }
@@ -170,10 +172,10 @@ export const getUserOnlineStatus = async (userId) => {
 // CHATROOM
 export const chatRoom = async (userId) => {
   try {
-    const userObjecyId = new ObjectId(userId);
+    const userObjectId = new mongoose.Types.ObjectId(userId);
 
     const privateChatQuery = {
-      $or: [{ sender: userObjecyId }, { receiver: userObjecyId }],
+      $or: [{ sender: userObjectId }, { receiver: userObjectId }],
     };
 
     const privateChats = await Message.aggregate([
@@ -182,10 +184,11 @@ export const chatRoom = async (userId) => {
       {
         $group: {
           _id: {
-            $cond: [{ $ne: ["$sender", userObjecyId] }, "$sender", "$receiver"],
+            $cond: [{ $ne: ["$sender", userObjectId] }, "$sender", "$receiver"],
           },
           latestMessageTime: { $first: "$createdAt" },
           latestMessage: { $first: "$message" },
+          latestMessageId: { $first: "$_id" },
           sender: { $first: "$sender" },
           messages: {
             $push: {
@@ -216,7 +219,7 @@ export const chatRoom = async (userId) => {
           userId: "userDetails._id",
           latestMessageTime: 1,
           latestMessage: 1,
-          senderId: 1,
+          sender: 1,
           unreadCount: {
             $size: {
               $filter: {
@@ -224,7 +227,7 @@ export const chatRoom = async (userId) => {
                 as: "msg",
                 cond: {
                   $and: [
-                    { $eq: ["$$msg.receiver", userObjecyId] },
+                    { $eq: ["$$msg.receiver", userObjectId] },
                     { $in: ["$$msg.status", ["sent", "delivered"]] },
                   ],
                 },
@@ -234,7 +237,7 @@ export const chatRoom = async (userId) => {
           latestMessageStatus: {
             $cond: [
               {
-                $eq: ["$sender", userObjecyId],
+                $eq: ["$sender", userObjectId],
               },
               {
                 $arrayElemAt: [
@@ -245,7 +248,7 @@ export const chatRoom = async (userId) => {
                           input: "$messages",
                           as: "msg",
                           cond: {
-                            $eq: ["$$msg.receiver", userObjecyId],
+                            $eq: ["$$msg.receiver", userObjectId],
                           },
                         },
                       },
