@@ -3,18 +3,13 @@ import { connectDb } from "./src/config/db.js";
 import userRoutes from "./src/routes/userRoutes.js";
 import chatRoutes from "./src/routes/chatRoute.js";
 import { Server } from "socket.io";
-import { updateUserLastSeen } from "./src/services/userServices.js";
-import { User } from "./src/models/User.js";
 import { createServer } from "http";
-import Message from "./src/models/messageModel.js";
 import {
-  roomId,
   updateMessageStatus,
   getUndeliveredMessages,
   markMessageAsDelivered,
   getUserLastSeen,
   createMessage,
-  markMessagesAsRead,
 } from "./src/services/chatServices.js";
 import { getRoomId } from "./src/utils/chatHelper.js";
 
