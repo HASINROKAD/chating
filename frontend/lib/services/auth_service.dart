@@ -10,23 +10,23 @@ import '../config.dart';
 class AuthService {
   static Future<bool> loginUser(String userName, String password) async {
     try {
-      final response = await http.post(
-        Uri.parse("${Config.API_BASE_URL}/api/users/login"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"username": userName, "password": password}),
-      );
+      final response = await http
+          .post(
+            Uri.parse("${Config.API_BASE_URL}/api/users/login"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({"username": userName, "password": password}),
+          )
+          .timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
-        if (data["userId"] != null) {
+        if (data["userId"] != null && data["token"] != null) {
           SharedPreferences prefs = await SharedPreferences.getInstance();
           await prefs.setString("userId", data["userId"]);
           await prefs.setString("token", data["token"]);
 
           //CHAT PLUGIN
-          await initializeChatPlugin(data["userId"], data["token"]);
-
-          await Future.delayed(const Duration(seconds: 5));
+          await initializeChatPlugin().timeout(const Duration(seconds: 15));
           return true;
         }
       }
@@ -41,23 +41,23 @@ class AuthService {
 
   static Future<bool> registerUser(String userName, String password) async {
     try {
-      final response = await http.post(
-        Uri.parse("${Config.API_BASE_URL}/api/users/register"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"username": userName, "password": password}),
-      );
-      if (response.statusCode == 200) {
+      final response = await http
+          .post(
+            Uri.parse("${Config.API_BASE_URL}/api/users/register"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({"username": userName, "password": password}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
 
-        if (data["userId"] != null) {
+        if (data["userId"] != null && data["token"] != null) {
           SharedPreferences prefs = await SharedPreferences.getInstance();
           await prefs.setString("userId", data["userId"]);
           await prefs.setString("token", data["token"]);
 
           //CHAT PLUGIN
-          await initializeChatPlugin(data["userId"], data["token"]);
-
-          await Future.delayed(const Duration(seconds: 5));
+          await initializeChatPlugin().timeout(const Duration(seconds: 15));
           return true;
         }
       }
@@ -99,15 +99,16 @@ class AuthService {
     await prefs.remove("userId");
     await prefs.remove("token");
 
+    if (!context.mounted) return;
+
     Navigator.of(context).pushReplacementNamed('/landing');
   }
 
-  static Future<void> initializeChatPlugin(String userId, String token) async {
+  static Future<void> initializeChatPlugin() async {
     try {
-      if (ChatConfig.instance.userId == userId) {
-        ChatPlugin.chatService.refreshGlobalConnection();
-        return;
-      }
+      final userId = await AuthService.getUserId();
+      final token = await AuthService.getUserToken();
+
       await ChatPlugin.initialize(
         config: ChatConfig(
           apiUrl: Config.API_BASE_URL,
@@ -121,6 +122,11 @@ class AuthService {
           debugMode: true,
         ),
       );
+
+      await _setupChatAPIHandlers(userId!, token!);
+
+      await ChatPlugin.chatService.initialize();
+      await ChatPlugin.chatService.loadChatRooms();
     } catch (e) {
       if (kDebugMode) {
         print("Error initializing chat plugin: $e");
@@ -137,7 +143,7 @@ class AuthService {
 
         try {
           var url =
-              "${Config.API_BASE_URL}/api/messages?currentUserId=$userId&receiverId=$receiverId&page=$page&limit=$limit";
+              "${Config.API_BASE_URL}/api/chat/messages?senderId=$userId&receiverId=$receiverId&page=$page&limit=$limit";
 
           if (searchText.isNotEmpty) {
             url += "&searchText=${Uri.encodeComponent(searchText)}";
@@ -152,9 +158,12 @@ class AuthService {
           );
 
           if (response.statusCode == 200) {
-            final List<dynamic> data = jsonDecode(response.body);
+            final Map<String, dynamic> data = jsonDecode(response.body);
+            final List<dynamic> messages = data["messages"] ?? [];
 
-            return data.map((msg) => ChatMessage.fromMap(msg, userId)).toList();
+            return messages
+                .map((msg) => ChatMessage.fromMap(msg, userId))
+                .toList();
           } else {
             return [];
           }
@@ -168,7 +177,7 @@ class AuthService {
 
       loadChatRoomsHandler: () async {
         try {
-          var url = "${Config.API_BASE_URL}/api/chat-room";
+          var url = "${Config.API_BASE_URL}/api/chat/chat-room";
 
           final response = await http.get(
             Uri.parse(url),
@@ -179,9 +188,10 @@ class AuthService {
           );
 
           if (response.statusCode == 200) {
-            final List<dynamic> data = jsonDecode(response.body);
+            final Map<String, dynamic> data = jsonDecode(response.body);
+            final List<dynamic> rooms = data["message"] ?? [];
 
-            return data.map((room) => ChatRoom.fromMap(room)).toList();
+            return rooms.map((room) => ChatRoom.fromMap(room)).toList();
           } else {
             return [];
           }
@@ -202,7 +212,10 @@ class AuthService {
       var token = await getUserToken();
       final response = await http.get(
         Uri.parse("${Config.API_BASE_URL}/api/users/users"),
-        headers: {"Content-Type": "application/json"},
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
