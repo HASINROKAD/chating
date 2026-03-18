@@ -2,6 +2,7 @@ import 'package:chat_plugin/chat_plugin.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:frontend/pages/chat_room.dart';
 import 'package:frontend/pages/landing_page.dart';
 import 'package:frontend/pages/login_page.dart';
 import 'package:frontend/pages/register_page.dart';
@@ -95,7 +96,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         '/landing': (context) => const LandingPage(),
         '/login': (context) => const LoginPage(),
         '/register': (context) => const RegisterPage(),
-        '/directMessages': (context) => const LandingPage(),
+        '/directMessages': (context) => const DirectMessages(),
       },
     );
   }
