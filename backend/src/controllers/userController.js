@@ -1,12 +1,20 @@
 import { register, login } from "../services/authService.js";
+import User from "../models/userModel.js";
 
 // Controller functions for user registration
 export const registerUser = async (req, res) => {
   const { username, password } = req.body;
 
   try {
-    const user = await register(username, password);
-    return res.status(201).json(user);
+    const response = await register(username, password);
+
+    if (response.error) {
+      return res
+        .status(response.statusCode || 400)
+        .json({ message: response.error });
+    }
+
+    return res.status(201).json(response);
   } catch (error) {
     return res.status(500).json({ message: "Error during registration user" });
   }
@@ -24,5 +32,16 @@ export const loginUser = async (req, res) => {
     return res.status(200).json(response);
   } catch (error) {
     return res.status(500).json({ message: "Login error" });
+  }
+};
+
+export const getUsers = async (req, res) => {
+  try {
+    const users = await User.find({ _id: { $ne: req.userId } }).select(
+      "_id username",
+    );
+    return res.status(200).json(users);
+  } catch (error) {
+    return res.status(500).json({ message: "Error fetching users" });
   }
 };

@@ -2,20 +2,32 @@ import User from "../models/userModel.js";
 import jwt from "jsonwebtoken";
 
 export const register = async (username, password) => {
+  if (!username || !password) {
+    return { error: "Username and password are required", statusCode: 400 };
+  }
+
   if (password.length < 8) {
-    return { error: "Password must be at least 8 characters long" };
+    return {
+      error: "Password must be at least 8 characters long",
+      statusCode: 400,
+    };
   }
 
   try {
     const user = await User.create({ username, password });
 
-    return { userId: user._id };
+    return {
+      token: jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+        expiresIn: "10d",
+      }),
+      userId: user._id,
+    };
   } catch (error) {
     if (error.code === 11000) {
-      return { error: "Username already exists" };
+      return { error: "Username already exists", statusCode: 409 };
     }
     console.error("Registration error:", error);
-    return { error: "Registration failed" };
+    return { error: "Registration failed", statusCode: 500 };
   }
 };
 

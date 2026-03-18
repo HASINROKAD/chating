@@ -8,10 +8,14 @@ import {
   updateMessageStatus,
   getUndeliveredMessages,
   markMessageAsDelivered,
+  markMessageAsRead,
   getUserLastSeen,
   createMessage,
+  updateUserLastSeen,
 } from "./src/services/chatServices.js";
 import { getRoomId } from "./src/utils/chatHelper.js";
+import User from "./src/models/userModel.js";
+import Message from "./src/models/messageModel.js";
 
 connectDb();
 const app = express();
@@ -36,14 +40,14 @@ io.on("connection", (socket) => {
 
   //Register user and store their socket ID
   socket.on("register_user", ({ userId }) => {
-    if (userId) return;
+    if (!userId) return;
 
     currentUserId = userId;
     onlineUsers.set(userId, socket.id);
 
     console.log(`User ${userId} registered with socket ID: ${socket.id}`);
 
-    checkPendingMessages();
+    checkPendingMessages(userId);
   });
 
   //Join a chat room
@@ -55,9 +59,9 @@ io.on("connection", (socket) => {
     currentUserId = userId;
     onlineUsers.set(userId, socket.id);
 
-    const roomId = roomId(userId, partnerId);
-    socket.join(roomId);
-    console.log(`User ${userId} joined room: ${roomId}`);
+    const room = getRoomId(userId, partnerId);
+    socket.join(room);
+    console.log(`User ${userId} joined room: ${room}`);
 
     try {
       const undeliveredMessages = await getUndeliveredMessages(
@@ -67,7 +71,7 @@ io.on("connection", (socket) => {
       const undeliveredCount = await markMessageAsDelivered(userId, partnerId);
       if (undeliveredCount > 0) {
         console.log(
-          `Marked ${undeliveredCount} messages as delivered for user ${userId} in room ${roomId}`,
+          `Marked ${undeliveredCount} messages as delivered for user ${userId} in room ${room}`,
         );
         undeliveredMessages.forEach((message) => {
           io.to(socket.id).emit("message_status", {
@@ -78,7 +82,7 @@ io.on("connection", (socket) => {
           });
         });
       }
-      io.to(roomId).emit("user_status", {
+      io.to(room).emit("user_status", {
         userId: userId,
         status: "online",
       });
@@ -113,10 +117,10 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const roomId = roomId(message.sender, message.receiver);
-    await createMessage({ ...message, status: "sent", roomId: roomId });
+    const room = getRoomId(message.sender, message.receiver);
+    await createMessage({ ...message, status: "sent", roomId: room });
     console.log(
-      `Message in room ${roomId} from ${message.sender} to ${message.receiver} : ${message.message}`,
+      `Message in room ${room} from ${message.sender} to ${message.receiver} : ${message.message}`,
     );
 
     if (onlineUsers.has(message.receiver)) {
@@ -126,13 +130,13 @@ io.on("connection", (socket) => {
       message.status = "sent";
     }
 
-    io.to(roomId).emit("new_message", message);
+    io.to(room).emit("new_message", message);
 
     if (onlineUsers.has(message.receiver)) {
       const receiverSocketId = onlineUsers.get(message.receiver);
       const receiverSocket = io.sockets.sockets.get(receiverSocketId);
 
-      if (receiverSocket && !receiverSocket.rooms.has(roomId)) {
+      if (receiverSocket && !receiverSocket.rooms.has(room)) {
         const sender = await User.findById(message.sender).select("username");
 
         receiverSocket.emit("new_message_notification", {
@@ -198,7 +202,7 @@ io.on("connection", (socket) => {
       try {
         await updateMessageStatus(messageId, "delivered");
 
-        const roomId = roomId(senderId, receiverId);
+        const room = getRoomId(senderId, receiverId);
 
         const statusUpdate = {
           messageId: messageId,
@@ -207,7 +211,7 @@ io.on("connection", (socket) => {
           receiver: receiverId,
         };
 
-        io.to(roomId).emit("message_status", statusUpdate);
+        io.to(room).emit("message_status", statusUpdate);
       } catch (error) {
         console.error("Error updating message status:", error);
       }
@@ -221,7 +225,7 @@ io.on("connection", (socket) => {
         await updateMessageStatus(messageId, "read");
       }
 
-      const roomId = roomId(senderId, receiverId);
+      const room = getRoomId(senderId, receiverId);
 
       messageIds.forEach((messageId) => {
         const statusUpdate = {
@@ -230,7 +234,7 @@ io.on("connection", (socket) => {
           sender: senderId,
           receiver: receiverId,
         };
-        io.to(roomId).emit("message_status", statusUpdate);
+        io.to(room).emit("message_status", statusUpdate);
       });
     } catch (error) {
       console.error("Error updating message status:", error);
@@ -240,11 +244,12 @@ io.on("connection", (socket) => {
   //mark_messages_read
   socket.on("mark_messages_read", async ({ userId, partnerId }) => {
     try {
-      const count = await markMessagesAsRead(userId, partnerId);
+      const count = await markMessageAsRead(userId, partnerId);
+
+      const room = getRoomId(userId, partnerId);
 
       if (count > 0) {
-        const roomId = roomId(userId, partnerId);
-        io.to(roomId).emit("messages_all_read", {
+        io.to(room).emit("messages_all_read", {
           reader: userId,
           sender: partnerId,
         });
@@ -254,7 +259,7 @@ io.on("connection", (socket) => {
         const senderSocketId = onlineUsers.get(partnerId);
         const senderSocket = io.sockets.sockets.get(senderSocketId);
 
-        if (senderSocket && !senderSocket.rooms.has(roomId)) {
+        if (senderSocket && !senderSocket.rooms.has(room)) {
           senderSocket.emit("messages_all_read", {
             readerId: userId,
             senderId: partnerId,
@@ -313,7 +318,7 @@ io.on("connection", (socket) => {
 // Function to check for pending messages when a user connects
 async function checkPendingMessages(userId) {
   try {
-    const pendingMessages = await MessageChannel.find({
+    const pendingMessages = await Message.find({
       receiver: userId,
       status: "sent",
     }).populate("sender", "username");
@@ -322,10 +327,13 @@ async function checkPendingMessages(userId) {
       const messageBySender = {};
 
       pendingMessages.forEach((message) => {
-        if (!messageBySender[msg.sender._id]) {
-          messageBySender[msg.sender._id] = [];
+        const senderId = String(message.sender._id);
+
+        if (!messageBySender[senderId]) {
+          messageBySender[senderId] = [];
         }
-        messageBySender[msg.sender._id].push(msg);
+
+        messageBySender[senderId].push(message);
       });
 
       const userSocket = io.sockets.sockets.get(onlineUsers.get(userId));
