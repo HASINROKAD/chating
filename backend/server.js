@@ -35,6 +35,16 @@ const io = new Server(httpServer, {
 
 const onlineUsers = new Map();
 const isValidUserId = (id) => mongoose.isValidObjectId(id);
+const normalizeDisplayName = (value) => {
+  const name = String(value || "").trim();
+  if (!name) return "Unknown";
+
+  if (name.includes("@")) {
+    return name.split("@")[0];
+  }
+
+  return name;
+};
 
 io.on("connection", (socket) => {
   console.log("New Client connected: ", socket.id);
@@ -151,7 +161,9 @@ io.on("connection", (socket) => {
         const sender = await User.findById(message.sender).select(
           "name username",
         );
-        const senderName = sender?.name || sender?.username || "Unknown";
+        const senderName = normalizeDisplayName(
+          sender?.name || sender?.username,
+        );
 
         receiverSocket.emit("new_message_notification", {
           messageId: message.messageId,
@@ -363,7 +375,9 @@ async function checkPendingMessages(userId) {
         Object.keys(messageBySender).forEach((senderId) => {
           const count = messageBySender[senderId].length;
           const sender = messageBySender[senderId][0].sender;
-          const senderName = sender.name || sender.username;
+          const senderName = normalizeDisplayName(
+            sender.name || sender.username,
+          );
 
           userSocket.emit("pending_messages", {
             senderId,

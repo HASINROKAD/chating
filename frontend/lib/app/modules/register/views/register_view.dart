@@ -1,79 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:frontend/app/modules/register/controllers/register_controller.dart';
 import 'package:frontend/app/routes/app_routes.dart';
-import 'package:frontend/services/auth_service.dart';
 
-class RegisterPage extends StatefulWidget {
-  const RegisterPage({super.key});
+class RegisterView extends GetView<RegisterController> {
+  const RegisterView({super.key});
 
-  @override
-  State<RegisterPage> createState() => _RegisterPageState();
-}
-
-class _RegisterPageState extends State<RegisterPage> {
   static const Color _primaryPurple = Color(0xFF8D39D9);
-
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-
-  bool _obscurePassword = true;
-  bool _acceptedTerms = false;
-  bool _isLoading = false;
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleRegister() async {
-    final String name = _nameController.text.trim();
-    final String email = _emailController.text.trim();
-    final String password = _passwordController.text.trim();
-
-    if (name.isEmpty || email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please fill all fields.')));
-      return;
-    }
-
-    if (!_acceptedTerms) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please accept terms and conditions.')),
-      );
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    final bool success = await AuthService.registerUser(email, password);
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (success) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Registration successful.')));
-      Get.offNamed(AppRoutes.login);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Registration failed. Please try again.')),
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -93,9 +27,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
+                    onPressed: Get.back,
                     style: TextButton.styleFrom(foregroundColor: Colors.white),
                     icon: const Icon(
                       Icons.arrow_back_ios_new_rounded,
@@ -130,47 +62,45 @@ class _RegisterPageState extends State<RegisterPage> {
                         const SizedBox(height: 44),
                         _buildLabeledInput(
                           label: 'Name',
-                          controller: _nameController,
+                          controller: controller.nameController,
                         ),
                         const SizedBox(height: 22),
                         _buildLabeledInput(
                           label: 'Email ID',
-                          controller: _emailController,
+                          controller: controller.emailController,
                           keyboardType: TextInputType.emailAddress,
                         ),
                         const SizedBox(height: 22),
-                        _buildLabeledInput(
-                          label: 'Password',
-                          controller: _passwordController,
-                          obscureText: _obscurePassword,
-                          suffixIcon: IconButton(
-                            onPressed: () {
-                              setState(() {
-                                _obscurePassword = !_obscurePassword;
-                              });
-                            },
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                              color: const Color(0xFF7C7C7C),
-                              size: 20,
+                        Obx(
+                          () => _buildLabeledInput(
+                            label: 'Password',
+                            controller: controller.passwordController,
+                            obscureText: controller.obscurePassword.value,
+                            suffixIcon: IconButton(
+                              onPressed: controller.toggleObscurePassword,
+                              icon: Icon(
+                                controller.obscurePassword.value
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                                color: const Color(0xFF7C7C7C),
+                                size: 20,
+                              ),
                             ),
                           ),
                         ),
                         const SizedBox(height: 16),
                         Row(
                           children: [
-                            Transform.scale(
-                              scale: 1.05,
-                              child: Checkbox(
-                                value: _acceptedTerms,
-                                activeColor: _primaryPurple,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _acceptedTerms = value ?? false;
-                                  });
-                                },
+                            Obx(
+                              () => Transform.scale(
+                                scale: 1.05,
+                                child: Checkbox(
+                                  value: controller.acceptedTerms.value,
+                                  activeColor: _primaryPurple,
+                                  onChanged: (value) {
+                                    controller.setAcceptedTerms(value ?? false);
+                                  },
+                                ),
                               ),
                             ),
                             Expanded(
@@ -199,35 +129,39 @@ class _RegisterPageState extends State<RegisterPage> {
                           ],
                         ),
                         const SizedBox(height: 18),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 56,
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _handleRegister,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _primaryPurple,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(32),
+                        Obx(
+                          () => SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: ElevatedButton(
+                              onPressed: controller.isLoading.value
+                                  ? null
+                                  : () => controller.handleRegister(context),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _primaryPurple,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(32),
+                                ),
                               ),
+                              child: controller.isLoading.value
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Register Now',
+                                      style: TextStyle(
+                                        fontSize: 30 / 1.6,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
                             ),
-                            child: _isLoading
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Text(
-                                    'Register Now',
-                                    style: TextStyle(
-                                      fontSize: 30 / 1.6,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
                           ),
                         ),
                         const SizedBox(height: 34),

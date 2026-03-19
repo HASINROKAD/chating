@@ -1,5 +1,16 @@
 import User from "../models/userModel.js";
 
+const normalizeDisplayName = (value) => {
+  const name = String(value || "").trim();
+  if (!name) return "Unknown";
+
+  if (name.includes("@")) {
+    return name.split("@")[0];
+  }
+
+  return name;
+};
+
 export const getUsers = async (req, res) => {
   try {
     const users = await User.find({ _id: { $ne: req.userId } }).select(
@@ -7,7 +18,7 @@ export const getUsers = async (req, res) => {
     );
 
     const response = users.map((user) => {
-      const displayName = user.name || user.username;
+      const displayName = normalizeDisplayName(user.name || user.username);
       return {
         _id: user._id,
         id: user._id,

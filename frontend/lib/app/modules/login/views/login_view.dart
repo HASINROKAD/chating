@@ -1,68 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:frontend/app/modules/login/controllers/login_controller.dart';
 import 'package:frontend/app/routes/app_routes.dart';
-import 'package:frontend/services/auth_service.dart';
 
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+class LoginView extends GetView<LoginController> {
+  const LoginView({super.key});
 
-  @override
-  State<LoginPage> createState() => _LoginPageState();
-}
-
-class _LoginPageState extends State<LoginPage> {
   static const Color _primaryPurple = Color(0xFF8D39D9);
-
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-
-  bool _obscurePassword = true;
-  bool _isLoading = false;
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleLogin() async {
-    final String username = _emailController.text.trim();
-    final String password = _passwordController.text.trim();
-
-    if (username.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter email and password.')),
-      );
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    final bool success = await AuthService.loginUser(username, password);
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (success) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Login successful.')));
-      Get.offAllNamed(AppRoutes.directMessages);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Login failed. Please try again.')),
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -77,7 +22,7 @@ class _LoginPageState extends State<LoginPage> {
           bottom: false,
           child: Column(
             children: [
-              _buildTopBar(context),
+              _buildTopBar(),
               Expanded(
                 child: Container(
                   width: double.infinity,
@@ -111,26 +56,24 @@ class _LoginPageState extends State<LoginPage> {
                         const SizedBox(height: 52),
                         _buildLabeledInput(
                           label: 'Email ID',
-                          controller: _emailController,
+                          controller: controller.emailController,
                           keyboardType: TextInputType.emailAddress,
                         ),
                         const SizedBox(height: 22),
-                        _buildLabeledInput(
-                          label: 'Password',
-                          controller: _passwordController,
-                          obscureText: _obscurePassword,
-                          suffixIcon: IconButton(
-                            onPressed: () {
-                              setState(() {
-                                _obscurePassword = !_obscurePassword;
-                              });
-                            },
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                              color: const Color(0xFF7C7C7C),
-                              size: 20,
+                        Obx(
+                          () => _buildLabeledInput(
+                            label: 'Password',
+                            controller: controller.passwordController,
+                            obscureText: controller.obscurePassword.value,
+                            suffixIcon: IconButton(
+                              onPressed: controller.toggleObscurePassword,
+                              icon: Icon(
+                                controller.obscurePassword.value
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                                color: const Color(0xFF7C7C7C),
+                                size: 20,
+                              ),
                             ),
                           ),
                         ),
@@ -139,7 +82,7 @@ class _LoginPageState extends State<LoginPage> {
                           alignment: Alignment.centerRight,
                           child: TextButton(
                             onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              ScaffoldMessenger.of(Get.context!).showSnackBar(
                                 const SnackBar(
                                   content: Text(
                                     'Forgot password is not available yet.',
@@ -165,35 +108,39 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ),
                         const SizedBox(height: 26),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 56,
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _handleLogin,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _primaryPurple,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(32),
+                        Obx(
+                          () => SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: ElevatedButton(
+                              onPressed: controller.isLoading.value
+                                  ? null
+                                  : () => controller.handleLogin(context),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _primaryPurple,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(32),
+                                ),
                               ),
+                              child: controller.isLoading.value
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Login',
+                                      style: TextStyle(
+                                        fontSize: 30 / 1.6,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
                             ),
-                            child: _isLoading
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Text(
-                                    'Login',
-                                    style: TextStyle(
-                                      fontSize: 30 / 1.6,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
                           ),
                         ),
                         const SizedBox(height: 34),
@@ -241,15 +188,13 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Widget _buildTopBar(BuildContext context) {
+  Widget _buildTopBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Align(
         alignment: Alignment.centerLeft,
         child: TextButton.icon(
-          onPressed: () {
-            Navigator.of(context).pop();
-          },
+          onPressed: Get.back,
           style: TextButton.styleFrom(foregroundColor: Colors.white),
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 14),
           label: const Text('Back'),

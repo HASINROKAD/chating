@@ -2,10 +2,9 @@ import 'package:chat_plugin/chat_plugin.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:frontend/pages/chat_room.dart';
-import 'package:frontend/pages/landing_page.dart';
-import 'package:frontend/pages/login_page.dart';
-import 'package:frontend/pages/register_page.dart';
+import 'package:get/get.dart';
+import 'package:frontend/app/routes/app_pages.dart';
+import 'package:frontend/app/routes/app_routes.dart';
 import 'package:frontend/services/auth_service.dart';
 
 void main() async {
@@ -88,52 +87,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      initialRoute: '/',
+    return GetMaterialApp(
+      initialRoute: AppRoutes.initial,
       debugShowCheckedModeBanner: false,
-      routes: {
-        '/': (context) => const InitializerWidget(),
-        '/landing': (context) => const LandingPage(),
-        '/login': (context) => const LoginPage(),
-        '/register': (context) => const RegisterPage(),
-        '/directMessages': (context) => const DirectMessages(),
-      },
+      getPages: AppPages.routes,
     );
-  }
-}
-
-class InitializerWidget extends StatefulWidget {
-  const InitializerWidget({super.key});
-
-  @override
-  State<InitializerWidget> createState() => _InitializerWidgetState();
-}
-
-class _InitializerWidgetState extends State<InitializerWidget> {
-  String? initialRoute;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkLogin();
-  }
-
-  Future<void> _checkLogin() async {
-    final isLoggedIn = await AuthService.isLoggedIn();
-
-    if (isLoggedIn == true) {
-      initialRoute = '/landing';
-    } else {
-      initialRoute = '/landing';
-    }
-
-    if (!mounted) return;
-
-    Navigator.of(context).pushReplacementNamed(initialRoute!);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }

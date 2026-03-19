@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:get/get.dart';
+import 'package:frontend/app/routes/app_routes.dart';
 
 class LandingPage extends StatelessWidget {
   const LandingPage({super.key});
@@ -93,7 +95,7 @@ class LandingPage extends StatelessWidget {
               height: 54,
               child: ElevatedButton(
                 onPressed: () {
-                  Navigator.of(context).pushNamed('/login');
+                  Get.toNamed(AppRoutes.login);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _primaryPurple,
@@ -119,7 +121,7 @@ class LandingPage extends StatelessWidget {
               height: 54,
               child: OutlinedButton(
                 onPressed: () {
-                  Navigator.of(context).pushNamed('/register');
+                  Get.toNamed(AppRoutes.register);
                 },
                 style: OutlinedButton.styleFrom(
                   foregroundColor: _primaryPurple,
