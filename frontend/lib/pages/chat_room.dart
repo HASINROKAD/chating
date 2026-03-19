@@ -1,6 +1,7 @@
 import 'package:chat_plugin/chat_plugin.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:frontend/pages/chat_page.dart';
 import 'package:frontend/services/auth_service.dart';
 
 class DirectMessages extends StatefulWidget {
@@ -14,7 +15,7 @@ class _DirectMessagesState extends State<DirectMessages> {
   final ChatService _chatService = ChatPlugin.chatService;
 
   bool _isLoading = true;
-  Map<String, int> _newMessageCount = {};
+  final Map<String, int> _newMessageCount = {};
 
   @override
   void initState() {
@@ -36,7 +37,7 @@ class _DirectMessagesState extends State<DirectMessages> {
       ChatEventType.custom,
       'direct_message_page_notification',
       (data) {
-        if (data["event_name"] == 'new_message_notification') {
+        if (data["eventName"] == 'new_message_notification') {
           _handleNewMessageNotification(data['data']);
         }
       },
@@ -45,16 +46,64 @@ class _DirectMessagesState extends State<DirectMessages> {
     _initChatService();
   }
 
-  _handleNewMessageNotification(Map<String, dynamic> messageData) {
+  @override
+  void dispose() {
+    _chatService.removeEventListener(
+      ChatEventType.chatRoomsChanged,
+      'direct_message_page',
+    );
+    _chatService.removeEventListener(
+      ChatEventType.custom,
+      'direct_message_page_notification',
+    );
+    super.dispose();
+  }
+
+  void _handleNewMessageNotification(Map<String, dynamic> messageData) {
     if (!mounted) return;
 
-    final senderId = messageData['senderId'];
+    final senderId = messageData['sender'] ?? messageData['senderId'];
 
     if (senderId != null) {
       setState(() {
         _newMessageCount[senderId] = (_newMessageCount[senderId] ?? 0) + 1;
       });
     }
+  }
+
+  String? _resolveUserId(dynamic user) {
+    if (user is! Map) return null;
+
+    final dynamic id = user['id'] ?? user['_id'] ?? user['userId'];
+    if (id == null) return null;
+
+    return id.toString();
+  }
+
+  Widget _buildAvatar(String username, String? avatarUrl) {
+    final String initial = username.isNotEmpty
+        ? username[0].toUpperCase()
+        : '?';
+
+    if (avatarUrl == null || avatarUrl.isEmpty) {
+      return CircleAvatar(
+        backgroundColor: Colors.grey[300],
+        child: Text(initial),
+      );
+    }
+
+    return CircleAvatar(
+      backgroundColor: Colors.grey[300],
+      child: ClipOval(
+        child: Image.network(
+          avatarUrl,
+          width: 40,
+          height: 40,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => Text(initial),
+        ),
+      ),
+    );
   }
 
   Future<void> _initChatService() async {
@@ -124,10 +173,18 @@ class _DirectMessagesState extends State<DirectMessages> {
                             itemCount: snapshot.data!.length,
                             itemBuilder: (context, index) {
                               var user = snapshot.data![index];
+                              final userId = _resolveUserId(user);
+                              final username = (user['username'] ?? '')
+                                  .toString();
+
                               return Padding(
                                 padding: EdgeInsets.symmetric(horizontal: 8.0),
                                 child: InkWell(
-                                  onTap: () {},
+                                  onTap: userId == null
+                                      ? null
+                                      : () {
+                                          _navigateToChat(userId, username);
+                                        },
                                   child: Column(
                                     mainAxisSize: .min,
                                     children: [
@@ -135,13 +192,15 @@ class _DirectMessagesState extends State<DirectMessages> {
                                         radius: 30,
                                         backgroundColor: Colors.grey[300],
                                         child: Text(
-                                          user['username'][0].toUpperCase(),
+                                          username.isNotEmpty
+                                              ? username[0].toUpperCase()
+                                              : '?',
                                           style: const TextStyle(fontSize: 24),
                                         ),
                                       ),
                                       SizedBox(height: 8),
                                       Text(
-                                        user['username'],
+                                        username,
                                         style: const TextStyle(fontSize: 14),
                                       ),
                                     ],
@@ -206,7 +265,7 @@ class _DirectMessagesState extends State<DirectMessages> {
     );
   }
 
-  _buildChatRoomItem(ChatRoom chatRoom) {
+  Container _buildChatRoomItem(ChatRoom chatRoom) {
     final localCount = _newMessageCount[chatRoom.userId] ?? 0;
     final unreadCount = localCount > chatRoom.unreadCount
         ? localCount
@@ -217,11 +276,7 @@ class _DirectMessagesState extends State<DirectMessages> {
         border: Border(bottom: BorderSide(color: Colors.grey[300]!, width: 1)),
       ),
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundImage: NetworkImage(
-            chatRoom.avatarUrl ?? "https://via.placeholder.com/150",
-          ),
-        ),
+        leading: _buildAvatar(chatRoom.username, chatRoom.avatarUrl),
         title: Text(chatRoom.username),
         subtitle: Text(
           MessageFormatter.formatMessagePreview(chatRoom.latestMessage),
@@ -246,7 +301,7 @@ class _DirectMessagesState extends State<DirectMessages> {
                   shape: BoxShape.circle,
                 ),
                 child: Text(
-                  "{$unreadCount}",
+                  "$unreadCount",
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12,
@@ -256,25 +311,28 @@ class _DirectMessagesState extends State<DirectMessages> {
               ),
           ],
         ),
-        onTap: () {},
+        onTap: () {
+          _navigateToChat(chatRoom.userId, chatRoom.username);
+        },
       ),
     );
   }
 
-  // void _navigateToChat(String userId, String username) {
-  //   setState(() {
-  //     _newMessageCount.remove(userId);
-  //   });
-  //   Navigator.push(
-  //     context,
-  //     MaterialPageRoute(
-  //       builder: (context) =>
-  //           ChatScreenPage(receiverId: userId, receiverName: username),
-  //     ),
-  //   ).then(_){
-  //     _chatService.loadChatRooms();
-  //   };
-  // }
+  void _navigateToChat(String userId, String username) {
+    setState(() {
+      _newMessageCount.remove(userId);
+    });
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            ChatPage(receiverId: userId, receiverName: username),
+      ),
+    ).then((_) {
+      _chatService.loadChatRooms();
+    });
+  }
 
   //
 }

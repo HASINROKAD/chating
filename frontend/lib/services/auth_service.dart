@@ -119,7 +119,7 @@ class AuthService {
           enableOnlineStatus: true,
           autoMarkAsRead: true,
           maxReconnectionAttempts: 5,
-          debugMode: true,
+          debugMode: false,
         ),
       );
 

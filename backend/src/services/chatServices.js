@@ -5,6 +5,14 @@ import { getRoomId } from "../utils/chatHelper.js";
 
 const ObjectId = mongoose.Types.ObjectId;
 
+const toObjectId = (id, fieldName) => {
+  if (!mongoose.isValidObjectId(id)) {
+    throw new Error(`Invalid ${fieldName}: ${id}`);
+  }
+
+  return new ObjectId(id);
+};
+
 export const createMessage = async (messageData) => {
   try {
     const message = new Message({
@@ -33,11 +41,15 @@ export const fetchChatMessages = async ({
   const roomId = getRoomId(senderId, receiverId);
   const query = { chatRoomId: roomId };
   try {
+    const currentUserObjectId = toObjectId(currentUserId, "currentUserId");
+
     if (currentUserId === receiverId) {
+      const senderObjectId = toObjectId(senderId, "senderId");
+
       const undeliveredQuery = {
         chatRoomId: roomId,
-        receiver: mongoose.Types.ObjectId(currentUserId),
-        sender: mongoose.Types.ObjectId(senderId),
+        receiver: currentUserObjectId,
+        sender: senderObjectId,
         status: "sent",
       };
 
@@ -49,21 +61,23 @@ export const fetchChatMessages = async ({
           `Updated ${undeliveredUpdate.modifiedCount} messages to delivered status.`,
         );
       }
-      const messages = await Message.aggregate([
-        { $match: query },
-        { $sort: { createdAt: -1 } },
-        { $skip: (page - 1) * limit },
-        { $limit: limit },
-        {
-          $addFields: {
-            isMine: {
-              $eq: ["$sender", { $toObjectId: currentUserId }],
-            },
+    }
+
+    const messages = await Message.aggregate([
+      { $match: query },
+      { $sort: { createdAt: -1 } },
+      { $skip: (page - 1) * limit },
+      { $limit: limit },
+      {
+        $addFields: {
+          isMine: {
+            $eq: ["$sender", currentUserObjectId],
           },
         },
-      ]);
-      return messages.reverse();
-    }
+      },
+    ]);
+
+    return messages.reverse();
   } catch (error) {
     throw new Error("Failed to retrieve messages: " + error.message);
   }
@@ -74,7 +88,7 @@ export const updateMessageStatus = async (messageId, status) => {
     const message = await Message.findOneAndUpdate(
       { messageId: messageId },
       { status: status },
-      { new: true },
+      { returnDocument: "after" },
     );
     return message;
   } catch (error) {
@@ -84,9 +98,12 @@ export const updateMessageStatus = async (messageId, status) => {
 
 export const getUndeliveredMessages = async (userId, partnerId) => {
   try {
+    const receiverObjectId = toObjectId(userId, "userId");
+    const senderObjectId = toObjectId(partnerId, "partnerId");
+
     const message = await Message.find({
-      receiver: userId,
-      sender: partnerId,
+      receiver: receiverObjectId,
+      sender: senderObjectId,
       status: "sent",
     }).sort({ createdAt: 1 });
     return message;
@@ -100,7 +117,7 @@ export const updateUserLastSeen = async (userId, lastSeen) => {
     const user = await User.findByIdAndUpdate(
       userId,
       { lastSeen: lastSeen },
-      { new: true },
+      { returnDocument: "after" },
     );
     return user;
   } catch (error) {
@@ -126,10 +143,13 @@ export const markMessageAsDelivered = async (userId, partnerId) => {
 
 export const markMessageAsRead = async (userId, partnerId) => {
   try {
+    const receiverObjectId = toObjectId(userId, "userId");
+    const senderObjectId = toObjectId(partnerId, "partnerId");
+
     const result = await Message.updateMany(
       {
-        receiver: mongoose.Types.ObjectId(userId),
-        sender: mongoose.Types.ObjectId(partnerId),
+        receiver: receiverObjectId,
+        sender: senderObjectId,
         status: { $in: ["sent", "delivered"] },
       },
       { $set: { status: "read" } },
@@ -215,8 +235,8 @@ export const chatRoom = async (userId) => {
           _id: 0,
           chatType: "private",
           messageId: "$latestMessageId",
-          username: "userDetails.username",
-          userId: "userDetails._id",
+          username: { $ifNull: ["$userDetails.name", "$userDetails.username"] },
+          userId: "$userDetails._id",
           latestMessageTime: 1,
           latestMessage: 1,
           sender: 1,
