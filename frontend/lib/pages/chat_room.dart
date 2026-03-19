@@ -1,7 +1,8 @@
 import 'package:chat_plugin/chat_plugin.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:frontend/pages/chat_page.dart';
+import 'package:get/get.dart';
+import 'package:frontend/app/modules/chat/views/chat_view.dart';
 import 'package:frontend/services/auth_service.dart';
 
 class DirectMessages extends StatefulWidget {
@@ -323,13 +324,9 @@ class _DirectMessagesState extends State<DirectMessages> {
       _newMessageCount.remove(userId);
     });
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            ChatPage(receiverId: userId, receiverName: username),
-      ),
-    ).then((_) {
+    Get.to(() => ChatView(receiverId: userId, receiverName: username))?.then((
+      _,
+    ) {
       _chatService.loadChatRooms();
     });
   }

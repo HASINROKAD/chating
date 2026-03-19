@@ -13,6 +13,17 @@ const toObjectId = (id, fieldName) => {
   return new ObjectId(id);
 };
 
+const normalizeDisplayName = (value) => {
+  const name = String(value || "").trim();
+  if (!name) return "Unknown";
+
+  if (name.includes("@")) {
+    return name.split("@")[0];
+  }
+
+  return name;
+};
+
 export const createMessage = async (messageData) => {
   try {
     const message = new Message({
@@ -285,7 +296,12 @@ export const chatRoom = async (userId) => {
         },
       },
     ]);
-    return privateChats.sort((a, b) => {
+    const normalizedChats = privateChats.map((chat) => ({
+      ...chat,
+      username: normalizeDisplayName(chat.username),
+    }));
+
+    return normalizedChats.sort((a, b) => {
       return new Date(b.latestMessageTime) - new Date(a.latestMessageTime);
     });
   } catch (error) {

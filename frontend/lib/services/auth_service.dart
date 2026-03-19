@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'package:chat_plugin/chat_plugin.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:frontend/app/routes/app_routes.dart';
 import '../config.dart';
 
 class AuthService {
@@ -39,13 +41,21 @@ class AuthService {
     }
   }
 
-  static Future<bool> registerUser(String userName, String password) async {
+  static Future<bool> registerUser(
+    String userName,
+    String password, {
+    String? name,
+  }) async {
     try {
       final response = await http
           .post(
             Uri.parse("${Config.API_BASE_URL}/api/users/register"),
             headers: {"Content-Type": "application/json"},
-            body: jsonEncode({"username": userName, "password": password}),
+            body: jsonEncode({
+              "name": (name ?? userName).trim(),
+              "username": userName,
+              "password": password,
+            }),
           )
           .timeout(const Duration(seconds: 15));
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -101,7 +111,7 @@ class AuthService {
 
     if (!context.mounted) return;
 
-    Navigator.of(context).pushReplacementNamed('/landing');
+    Get.offAllNamed(AppRoutes.landing);
   }
 
   static Future<void> initializeChatPlugin() async {
