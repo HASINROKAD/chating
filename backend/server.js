@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import { connectDb } from "./src/config/db.js";
 import userRoutes from "./src/routes/userRoutes.js";
 import chatRoutes from "./src/routes/chatRoute.js";
@@ -33,6 +34,7 @@ const io = new Server(httpServer, {
 });
 
 const onlineUsers = new Map();
+const isValidUserId = (id) => mongoose.isValidObjectId(id);
 
 io.on("connection", (socket) => {
   console.log("New Client connected: ", socket.id);
@@ -40,7 +42,10 @@ io.on("connection", (socket) => {
 
   //Register user and store their socket ID
   socket.on("register_user", ({ userId }) => {
-    if (!userId) return;
+    if (!userId || !isValidUserId(userId)) {
+      console.error("Invalid userId received in register_user event.");
+      return;
+    }
 
     currentUserId = userId;
     onlineUsers.set(userId, socket.id);
@@ -56,6 +61,12 @@ io.on("connection", (socket) => {
       console.error("User ID and Partner ID are required to join a room.");
       return;
     }
+
+    if (!isValidUserId(userId) || !isValidUserId(partnerId)) {
+      console.error("Invalid userId or partnerId received in join_room event.");
+      return;
+    }
+
     currentUserId = userId;
     onlineUsers.set(userId, socket.id);
 
@@ -137,12 +148,15 @@ io.on("connection", (socket) => {
       const receiverSocket = io.sockets.sockets.get(receiverSocketId);
 
       if (receiverSocket && !receiverSocket.rooms.has(room)) {
-        const sender = await User.findById(message.sender).select("username");
+        const sender = await User.findById(message.sender).select(
+          "name username",
+        );
+        const senderName = sender?.name || sender?.username || "Unknown";
 
         receiverSocket.emit("new_message_notification", {
           messageId: message.messageId,
           senderId: message.sender,
-          senderName: sender ? sender.username : "Unknown",
+          senderName,
           message: message.message,
         });
       }
@@ -244,6 +258,13 @@ io.on("connection", (socket) => {
   //mark_messages_read
   socket.on("mark_messages_read", async ({ userId, partnerId }) => {
     try {
+      if (!isValidUserId(userId) || !isValidUserId(partnerId)) {
+        console.error(
+          "Invalid userId or partnerId received in mark_messages_read event.",
+        );
+        return;
+      }
+
       const count = await markMessageAsRead(userId, partnerId);
 
       const room = getRoomId(userId, partnerId);
@@ -321,7 +342,7 @@ async function checkPendingMessages(userId) {
     const pendingMessages = await Message.find({
       receiver: userId,
       status: "sent",
-    }).populate("sender", "username");
+    }).populate("sender", "name username");
 
     if (pendingMessages.length > 0) {
       const messageBySender = {};
@@ -341,7 +362,8 @@ async function checkPendingMessages(userId) {
       if (userSocket) {
         Object.keys(messageBySender).forEach((senderId) => {
           const count = messageBySender[senderId].length;
-          const senderName = messageBySender[senderId][0].sender.username;
+          const sender = messageBySender[senderId][0].sender;
+          const senderName = sender.name || sender.username;
 
           userSocket.emit("pending_messages", {
             senderId,
